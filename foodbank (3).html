@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台灣食物銀行地圖</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root {
+            --bg-body: #ffffff;
+            --bg-sidebar: #f8f9fa;
+            --bg-nav: #ffffff;
+            --text-primary: #333333;
+            --text-secondary: #555555;
+            --header-bg: #2e7d32;
+            --header-text: #ffffff;
+            --nav-hover: #e8f5e9;
+            --nav-active: #c8e6c9;
+            --nav-active-text: #1b5e20;
+            --border-color: #e0e0e0;
+            --badge-bg: #f57c00;
+            --accent-green: #2e7d32;
+            --popup-text: #2e7d32;
+            --shadow: rgba(0,0,0,0.1);
+            --map-tile: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+            --btn-bg: #ffffff;
+            --btn-text: #2e7d32;
+            --btn-border: #2e7d32;
+            --page-title: #2e7d32;
+            --cta-bg: #2e7d32;
+            --cta-text: #ffffff;
+            --link-color: #2e7d32;
+        }
+
+        [data-theme="dark"] {
+            --bg-body: #0f172a;
+            --bg-sidebar: #1e293b;
+            --bg-nav: #1e293b;
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --header-bg: #14532d;
+            --header-text: #f1f5f9;
+            --nav-hover: #334155;
+            --nav-active: #064e3b;
+            --nav-active-text: #4ade80;
+            --border-color: #334155;
+            --badge-bg: #c2410c;
+            --accent-green: #4ade80;
+            --popup-text: #4ade80;
+            --shadow: rgba(0,0,0,0.4);
+            --btn-bg: #1e293b;
+            --btn-text: #4ade80;
+            --btn-border: #4ade80;
+            --page-title: #4ade80;
+            --cta-bg: #14532d;
+            --cta-text: #f1f5f9;
+            --link-color: #4ade80;
+        }
+
+        body { 
+            margin: 0; 
+            padding: 0; 
+            font-family: '微軟正黑體', 'PingFang TC', sans-serif; 
+            display: flex; 
+            height: 100vh; 
+            flex-direction: row;
+            background: var(--bg-body);
+            transition: background 0.3s ease;
+        }
+        #sidebar { 
+            width: 320px; 
+            background: var(--bg-sidebar); 
+            overflow-y: auto; 
+            box-shadow: 2px 0 10px var(--shadow); 
+            z-index: 1000; 
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            transition: background 0.3s ease;
+        }
+        #map-wrap { flex-grow: 1; position: relative; height: 100%; }
+        #map { width: 100%; height: 100%; }
+
+        /* 語言切換按鈕 (右上角) */
+        #lang-toggle {
+            position: absolute;
+            top: 12px;
+            right: 58px;
+            z-index: 1500;
+            background: var(--btn-bg);
+            color: var(--btn-text);
+            border: 2px solid var(--btn-border);
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 2px 8px var(--shadow);
+            font-family: inherit;
+            transition: all 0.3s ease;
+        }
+        #lang-toggle:hover { background: var(--btn-border); color: var(--header-text); }
+
+        /* 主題切換按鈕 */
+        #theme-toggle {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 1500;
+            background: var(--btn-bg);
+            color: var(--btn-text);
+            border: 2px solid var(--btn-border);
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            font-size: 18px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px var(--shadow);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        #theme-toggle:hover { background: var(--btn-border); color: var(--header-text); transform: scale(1.1); }
+
+        .header { 
+            background: var(--header-bg);
+            color: var(--header-text); 
+            padding: 20px; 
+            text-align: center; 
+            transition: background 0.3s ease;
+        }
+        .header h2 { margin: 0 0 5px 0; font-size: 20px;}
+        .foodbank-item { 
+            padding: 15px; 
+            border-bottom: 1px solid var(--border-color); 
+            cursor: pointer; 
+            transition: background 0.2s; 
+        }
+        .foodbank-item:hover { background: var(--nav-hover); }
+        .foodbank-item h3 { margin: 0 0 8px 0; font-size: 16px; color: var(--text-primary); }
+        .foodbank-item p { margin: 5px 0; font-size: 13px; color: var(--text-secondary); line-height: 1.4;}
+        .badge { 
+            display: inline-block; 
+            padding: 3px 8px; 
+            background: var(--badge-bg); 
+            color: white; 
+            border-radius: 12px; 
+            font-size: 11px; 
+            margin-left: 5px;
+            vertical-align: text-bottom;
+        }
+
+        #right-nav {
+            width: 260px;
+            background: var(--bg-nav);
+            box-shadow: -2px 0 10px var(--shadow);
+            transition: width 0.3s ease, background 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 1000;
+        }
+        #right-nav.collapsed { 
+            width: 48px; 
+            background: transparent;
+            box-shadow: none;
+        }
+        #right-nav.collapsed .nav-content,
+        #right-nav.collapsed .nav-title { display: none; }
+        #right-nav.collapsed .nav-header {
+            padding: 0;
+            background: transparent;
+            min-height: 48px;
+            justify-content: center;
+        }
+        #right-nav.collapsed .nav-toggle {
+            position: static;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            background: var(--header-bg);
+            color: var(--header-text);
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 4px;
+        }
+
+        .nav-header {
+            background: var(--header-bg);
+            color: var(--header-text);
+            padding: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 24px;
+            transition: background 0.3s ease;
+        }
+        .nav-title { font-weight: bold; font-size: 16px; }
+        .nav-toggle {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: var(--header-text);
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+        .nav-toggle:hover { background: rgba(255,255,255,0.35); }
+
+        .nav-menu { display: flex; flex-direction: column; padding: 10px 0; border-bottom: 1px solid var(--border-color); }
+        .nav-item {
+            background: none;
+            border: none;
+            text-align: left;
+            padding: 12px 18px;
+            font-size: 15px;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-family: inherit;
+            transition: background 0.2s, color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .nav-item:hover { background: var(--nav-hover); }
+        .nav-item.active { background: var(--nav-active); color: var(--nav-active-text); font-weight: bold; }
+
+        .nav-page {
+            padding: 18px;
+            overflow-y: auto;
+            flex-grow: 1;
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+        .nav-page h3 { color: var(--page-title); margin-top: 0; }
+        .nav-page .cta {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 10px 16px;
+            background: var(--cta-bg);
+            color: var(--cta-text);
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 13px;
+            transition: opacity 0.2s;
+        }
+        .nav-page .cta:hover { opacity: 0.85; }
+        .nav-page ul { padding-left: 20px; }
+        .nav-page a { color: var(--link-color); }
+        .nav-page strong { color: var(--text-primary); }
+
+        /* 暗色地圖濾鏡（備用，若不想切換 tiles） */
+        [data-theme="dark"] #map { filter: brightness(0.75) contrast(1.15); }
+
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            #sidebar { width: 100%; height: 35%; box-shadow: 0 -2px 10px var(--shadow); }
+            #map-wrap { height: 45%; }
+            #right-nav { width: 100%; height: 20%; }
+            #right-nav.collapsed { width: 100%; height: 48px; }
+            #lang-toggle { top: 10px; right: 54px; padding: 6px 10px; font-size: 12px; }
+            #theme-toggle { top: 10px; right: 10px; width: 34px; height: 34px; font-size: 16px; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <div class="header">
+        <h2 id="header-title">🥦 台灣食物銀行地圖</h2>
+        <p id="header-sub" style="font-size: 13px; margin: 0; opacity: 0.9;">分享資源，傳遞溫暖</p>
+    </div>
+    <div id="foodbank-list"></div>
+</div>
+
+<div id="map-wrap">
+    <div id="map"></div>
+    <button id="lang-toggle">EN</button>
+    <button id="theme-toggle" title="切換亮暗主題">🌙</button>
+</div>
+
+<aside id="right-nav">
+    <div class="nav-header">
+        <span class="nav-title" id="nav-title">目錄</span>
+        <button class="nav-toggle" id="navToggle" title="收縮/展開">≡</button>
+    </div>
+    <div class="nav-content" style="display:flex; flex-direction:column; flex-grow:1; overflow:hidden;">
+        <div class="nav-menu">
+            <button class="nav-item active" data-page="about">ℹ️ <span class="label"></span></button>
+            <button class="nav-item" data-page="donate">💚 <span class="label"></span></button>
+            <button class="nav-item" data-page="help">🙋 <span class="label"></span></button>
+        </div>
+        <div class="nav-page" id="navPage"></div>
+    </div>
+</aside>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    const map = L.map('map').setView([23.6978, 120.9605], 7);
+    
+    // 亮色/暗色 tiles
+    const lightTiles = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    const darkTiles = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+    
+    let currentTileLayer = L.tileLayer(lightTiles, {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 18
+    }).addTo(map);
+
+    const foodBanks = [
+        { id:1, lat:25.0278, lng:121.5054, phone:"02-2305-6256",
+          zh:{ name:"南機場幸福食物銀行", address:"台北市中正區中華路二段315巷", needs:"米、麵條、罐頭食品", type:"實體店面" },
+          en:{ name:"Nanjichang Happiness Food Bank", address:"Ln. 315, Sec. 2, Zhonghua Rd., Zhongzheng Dist., Taipei", needs:"Rice, noodles, canned food", type:"Physical Store" } },
+        { id:2, lat:25.0621, lng:121.4502, phone:"02-2290-2248",
+          zh:{ name:"安得烈食物銀行 (台北總部)", address:"新北市新莊區五工路99之2號", needs:"嬰幼兒奶粉、尿布", type:"物資包派送" },
+          en:{ name:"Andrew Food Bank (Taipei HQ)", address:"No. 99-2, Wugong Rd., Xinzhuang Dist., New Taipei", needs:"Infant formula, diapers", type:"Supply Delivery" } },
+        { id:3, lat:24.1374, lng:120.6853, phone:"04-2228-9111",
+          zh:{ name:"台中市愛心食物銀行", address:"台中市中區", needs:"乾糧、保久乳、沙拉油", type:"發放站" },
+          en:{ name:"Taichung Love Food Bank", address:"Central Dist., Taichung", needs:"Dry food, UHT milk, cooking oil", type:"Distribution Point" } },
+        { id:4, lat:22.6273, lng:120.3014, phone:"07-222-1919",
+          zh:{ name:"1919 食物銀行 (高屏區)", address:"高雄市新興區", needs:"生活日用品、急難救助金", type:"集散中心" },
+          en:{ name:"1919 Food Bank (Kaohsiung-Pingtung)", address:"Xinxing Dist., Kaohsiung", needs:"Daily necessities, emergency aid", type:"Hub Center" } }
+    ];
+
+    const i18n = {
+        zh: {
+            title: "🥦 台灣食物銀行地圖", sub: "分享資源，傳遞溫暖",
+            navTitle: "目錄", about: "關於我們", donate: "捐款", help: "幫助",
+            addr: "📍 地址：", phone: "📞 電話：", needs: "📦 急缺物資：", shortNeed: "缺：",
+            langBtn: "EN",
+            pages: {
+                about: `<h3>關於我們</h3>
+                    <p>「台灣食物銀行地圖」是一個非營利的公益資訊平台，致力於串聯全台各地的食物銀行、發放站與物資集散中心，讓需要協助的家庭能就近獲得溫飽。</p>
+                    <p><strong>我們的使命：</strong></p>
+                    <ul><li>減少食物浪費，促進資源循環</li><li>協助弱勢家庭穩定取得三餐</li><li>讓善意更有效率地流動</li></ul>`,
+                donate: `<h3>捐款支持</h3>
+                    <p>您的每一份捐款，都能化為一餐熱飯、一包奶粉、一份希望。</p>
+                    <ul><li>銀行：玉山銀行 (808)</li><li>戶名：台灣食物銀行聯合會</li><li>帳號：0000-000-000000</li></ul>
+                    <p><strong>物資捐贈：</strong>米、麵、罐頭、奶粉、尿布、保久乳等。</p>
+                    <a href="#" class="cta">立即捐款</a>`,
+                help: `<h3>需要幫助？</h3>
+                    <p>若您或您身邊的人正面臨經濟困境、無法溫飽，請別擔心，我們在這裡。</p>
+                    <p><strong>申請步驟：</strong></p>
+                    <ul><li>於地圖上找到離您最近的食物銀行</li><li>致電聯絡據點，說明家庭狀況</li><li>備妥身分證、戶籍資料前往領取</li></ul>
+                    <p><strong>24 小時服務專線：</strong>1957</p>`
+            }
+        },
+        en: {
+            title: "🥦 Taiwan Food Bank Map", sub: "Share resources, spread warmth",
+            navTitle: "Menu", about: "About Us", donate: "Donate", help: "Help",
+            addr: "📍 Address: ", phone: "📞 Phone: ", needs: "📦 Urgent needs: ", shortNeed: "Need: ",
+            langBtn: "中",
+            pages: {
+                about: `<h3>About Us</h3>
+                    <p>"Taiwan Food Bank Map" is a non-profit information platform connecting food banks, distribution stations and supply hubs across Taiwan, so families in need can find help nearby.</p>
+                    <p><strong>Our Mission:</strong></p>
+                    <ul><li>Reduce food waste and promote resource circulation</li><li>Help vulnerable families access daily meals</li><li>Make kindness flow more efficiently</li></ul>`,
+                donate: `<h3>Support Us</h3>
+                    <p>Every donation becomes a hot meal, a pack of formula, a piece of hope.</p>
+                    <ul><li>Bank: E.SUN Bank (808)</li><li>Account Name: Taiwan Food Bank Association</li><li>Account No.: 0000-000-000000</li></ul>
+                    <p><strong>In-kind donations:</strong> rice, noodles, canned food, formula, diapers, UHT milk.</p>
+                    <a href="#" class="cta">Donate Now</a>`,
+                help: `<h3>Need Help?</h3>
+                    <p>If you or someone you know is facing financial hardship, don't worry — we are here.</p>
+                    <p><strong>How to Apply:</strong></p>
+                    <ul><li>Find the nearest food bank on the map</li><li>Call the location and explain your situation</li><li>Bring ID and household documents to collect supplies</li></ul>
+                    <p><strong>24-hour Hotline:</strong> 1957</p>`
+            }
+        }
+    };
+
+    let currentLang = 'zh';
+    const listContainer = document.getElementById('foodbank-list');
+    const markers = [];
+
+    function buildList() {
+        listContainer.innerHTML = '';
+        markers.forEach(m => map.removeLayer(m.marker));
+        markers.length = 0;
+        const t = i18n[currentLang];
+
+        foodBanks.forEach(fb => {
+            const d = fb[currentLang];
+            const marker = L.marker([fb.lat, fb.lng]).addTo(map);
+            marker.bindPopup(`
+                <div style="font-family: '微軟正黑體', sans-serif;">
+                    <strong style="font-size:16px; color: var(--popup-text, #2e7d32);">${d.name}</strong><br>
+                    <div style="margin-top: 8px;">${t.addr}${d.address}</div>
+                    <div>${t.phone}${fb.phone}</div>
+                    <div style="margin-top: 5px; color:#d84315;">${t.needs}${d.needs}</div>
+                </div>
+            `);
+            markers.push({ id: fb.id, marker });
+
+            const item = document.createElement('div');
+            item.className = 'foodbank-item';
+            item.innerHTML = `
+                <h3>${d.name} <span class="badge">${d.type}</span></h3>
+                <p>📍 ${d.address}</p>
+                <p style="color: #d84315; font-weight: bold;">${t.shortNeed}${d.needs}</p>
+            `;
+            item.onclick = () => {
+                map.flyTo([fb.lat, fb.lng], 14, { duration: 1.5 });
+                setTimeout(() => marker.openPopup(), 1500);
+            };
+            listContainer.appendChild(item);
+        });
+    }
+
+    function applyLang() {
+        const t = i18n[currentLang];
+        document.documentElement.lang = currentLang === 'zh' ? 'zh-TW' : 'en';
+        document.getElementById('header-title').textContent = t.title;
+        document.getElementById('header-sub').textContent = t.sub;
+        document.getElementById('nav-title').textContent = t.navTitle;
+        document.getElementById('lang-toggle').textContent = t.langBtn;
+        document.querySelectorAll('.nav-item').forEach(btn => {
+            btn.querySelector('.label').textContent = t[btn.dataset.page];
+        });
+        const active = document.querySelector('.nav-item.active');
+        showPage(active ? active.dataset.page : 'about');
+        buildList();
+    }
+
+    const navPage = document.getElementById('navPage');
+    const navItems = document.querySelectorAll('.nav-item');
+    function showPage(key) {
+        navPage.innerHTML = i18n[currentLang].pages[key];
+        navItems.forEach(b => b.classList.toggle('active', b.dataset.page === key));
+    }
+    navItems.forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.page)));
+
+    document.getElementById('lang-toggle').addEventListener('click', () => {
+        currentLang = currentLang === 'zh' ? 'en' : 'zh';
+        applyLang();
+    });
+
+    const rightNav = document.getElementById('right-nav');
+    document.getElementById('navToggle').addEventListener('click', () => {
+        rightNav.classList.toggle('collapsed');
+        setTimeout(() => map.invalidateSize(), 300);
+    });
+
+    // 主題切換邏輯
+    const themeToggle = document.getElementById('theme-toggle');
+    let isDark = false;
+
+    function applyTheme() {
+        if (isDark) {
+            document.body.setAttribute('data-theme', 'dark');
+            themeToggle.textContent = '☀️';
+            themeToggle.title = currentLang === 'zh' ? '切換亮色主題' : 'Switch to Light';
+            // 切換地圖 tiles
+            map.removeLayer(currentTileLayer);
+            currentTileLayer = L.tileLayer(darkTiles, {
+                attribution: '© <a href="https://carto.com/">CARTO</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+                maxZoom: 18,
+                subdomains: 'abcd'
+            }).addTo(map);
+        } else {
+            document.body.removeAttribute('data-theme');
+            themeToggle.textContent = '🌙';
+            themeToggle.title = currentLang === 'zh' ? '切換暗色主題' : 'Switch to Dark';
+            map.removeLayer(currentTileLayer);
+            currentTileLayer = L.tileLayer(lightTiles, {
+                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                maxZoom: 18
+            }).addTo(map);
+        }
+    }
+
+    themeToggle.addEventListener('click', () => {
+        isDark = !isDark;
+        applyTheme();
+    });
+
+    applyLang();
+</script>
+</body>
+</html>
